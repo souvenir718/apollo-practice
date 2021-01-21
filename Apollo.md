@@ -42,3 +42,110 @@ ReactDOM.render(
 - `httpLink`는 GraphQL API를 사용하여 `ApolloClient` 인스턴스에 연결한다. GraphQL 서버는 `http://localhost:4000`에서 동작하고 있어야 한다.
 - `httpLink`를 인자로 전달하여 `ApolloClient` 인스턴스를 생성하고, `InMemoryCache` 인스턴스를 새로 생성한다.
 - React 어플리케이션의 최상위 컴포넌트를 렌더링한다. `App`은 고차 컴포넌트 `ApolloProvider`로 감싸지고 `client`를 props로 전달받는다.
+
+
+
+### GraphQL 쿼리
+
+```javascript
+{
+  feed {
+    links {
+      id
+      createdAt
+      description
+      url
+    }
+  }
+}
+```
+
+
+
+#### Apollo 클라이언트와 함께 쿼리 사용
+
+##### 1) `ApolloClient`의 `.query()` 메서드를 직접 사용
+
+- 데이터를 불러올 수 있는 직접적인 방법이며 응답 결과는 Promise 형태로 받게 된다.
+
+```javascript
+client.query({
+    query:gql`
+	{
+		feed {
+			links {
+				id
+			}
+		}
+	}
+	`
+}).then(response => console.log(response.data.allLinks))
+```
+
+
+
+##### 2) Render Prop API
+
+  React를 사용시 보다 선언적인 방법은 Apollo의 새로운 **Render Prop API**를 사용하여 컴포넌트만으로 GraphQL 데이터를 관리하는 것이다.
+
+  이 방식으로 데이터를 불러오면, `props`에 GraphQL 쿼리를 전달하는 것만으로 `<Query/>` 컴포넌트가 알아서 데이터를 불러온 뒤 컴포넌트의 **Render Prop** 함수 내에서 사용할 수 있게 해준다.
+
+1. `gql` 파서 함수를 사용하여 자바스크립트 상수 형태로 쿼리 작성
+2. `props`로 GraphQL 쿼리를 전달한 `<Query/>` 컴포넌트를 사용
+3. 컴포넌트의 `Render Prop` 함수를 거쳐서 주입된 쿼리 결과에 접근
+
+```jsx
+# LinkList.js
+import { gql } from 'apollo-boost';
+import React, { Component } from 'react';
+import { Query } from 'react-apollo';
+import Link from './Link';
+
+const FEED_QUERY = gql`
+    {
+        feed {
+            links {
+                id
+                createdAt
+                url
+                description
+            }
+        }
+    }
+`;
+
+class LinkList extends Component {
+    render() {
+        return (
+            <Query query={FEED_QUERY}>
+                {({ loading, error, data }) => {
+                    if (loading) return <div>Fetching</div>;
+                    if (error) return <div>Error</div>;
+
+                    const linksToRender = data.feed.links;
+
+                    return (
+                        <div>
+                            {linksToRender.map((link) => (
+                                <Link key={link.id} link={link} />
+                            ))}
+                        </div>
+                    );
+                }}
+            </Query>
+        );
+    }
+}
+
+export default LinkList;
+```
+
+1. `FEED_QUERY` 라는 상수를 선언하여 쿼리를 저장한다. `gql` 함수는 GraphQL 코드를 포함하는 평문 String을 파싱하는데 사용된다. 
+2. 반환되는 코드를 `<Query/>` 컴포넌트로 감싼다. 여기서 `FEED_QUERY`는 `props`로 전달된다.
+
+`Render Props` 함수내의 `props`
+
+- `loading` :  요청이 현재 이루어지고 있으며 응답이 반환되지 않았다면 항상 **true**
+
+- `error` : 요청이 실패했을 경우, 무엇이 잘못되었는지에 대한 정보를 포함한다.
+- `data` : 서버로부터 반환된 실제 데이터다. 지금의 경우  `Link` 요소로 이루어진 리스트를 나타내는 `links` 속성이 들어있다.
